@@ -23,8 +23,12 @@
 - Prod validation: GitHub client ID/secret + `QQ_APP_ID` required, `GITHUB_REDIRECT_URI` must be HTTPS, `GITHUB_APP_REDIRECT_URI` must equal `com.resdownload.android://oauth/callback` exactly.
 - Admins: `ADMIN_EMAIL_DOMAINS` or GitHub whitelist via `make seed-admin ID=<github_id> LOGIN=<login>` (`scripts/main.go` → `admin_github_users`).
 
-## API / Auth Traps
+## Crypto Rules
 
+- Never hand-roll primitives (AEAD, key agreement, KDF, signatures). Server side uses `golang.org/x/crypto`; Android uses BouncyCastle lightweight API (`org.bouncycastle.crypto.*`, never register the JCE provider) / JCE / Tink. Only glue is hand-written (nonce generation, HKDF info/AAD binding, field encoding).
+- Every new algorithm ships with independent third-party vectors (RFC/draft test vectors or libsodium/BC cross-checks) that must pass before merge.
+
+## API / Auth Traps
 - All handlers return `{code,message,data}` (`internal/pkg/response/response.go`); check `code == 0`, not just HTTP 2xx.
 - `POST /api/v1/auth/qq/login` (`internal/service/qq_service.go`): server re-fetches OpenID from `qq.me-url` (`QQ_ME_URL`), requires Tencent's `client_id` to equal configured `qq.app-id`, rejects claimed/server OpenID mismatch. Accounts keyed by OpenID in `auth_identities` (provider `qq`); new QQ users get `USER` / `RoleSourceQqDefault`. Override `QQ_ME_URL`/`QQ_USER_INFO_URL` with a stub in tests.
 - ECDH issuance v1 (`keyType=x25519-xchacha20poly1305-v1`, `internal/pkg/crypto/ecdh.go`): `POST /webdav/credential` and `POST /update/resolve` switch to the encrypted envelope branch when the request carries `clientPublicKey`; legacy requests without it still get plaintext. `update/resolve` is single-use per JTI (replay → `update_url_expired`). Contract in `docs/FRONTEND_APPEND_V1_1.md` §ECDH; keep `ecdh.go`'s construction comment in sync with the Android implementation.

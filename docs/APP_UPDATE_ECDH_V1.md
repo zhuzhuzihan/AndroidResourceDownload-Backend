@@ -57,18 +57,29 @@ POST /api/v1/update/resolve { encryptedUrl, clientPublicKey, keyType }
    "exp": 173…（unix 秒）, "jti": "…" }`。校验 `exp > now`，
    `versionCode` 与 info 一致，然后使用 `targetUrl`。
 
-## 4. 平台实现要点
+## 4. 平台实现（BouncyCastle 轻量 API，不手写算法）
 
-- **X25519**：API 31+ 直接用 JCE（`KeyAgreement.getInstance("XDH")` +
-  `XECPublicKeySpec`）；minSdk 低于 31 的，需要 Tink 或自带实现，
-  定方案前先确认 minSdk。
-- **XChaCha20-Poly1305**：JCE 没有。二选一：(a) 手写约 200 行纯
-  Kotlin（HChaCha20 + ChaCha20 + Poly1305），用 §5 向量对拍；
-  (b) Tink `XChaCha20Poly1305Parameters` + `Variant.NO_PREFIX`
-  （裸格式；默认带 5 字节 key-id 前缀，与后端不互通）。
-- **HKDF-SHA256**：JCE 无标准实现，手写 extract/expand 约 30 行，
-  用 RFC 5869 §A.3（SHA-256，Case 3）自检。
-- 私钥字节用完后清零；公私钥对象不进内存缓存、不跨请求复用。
+按仓库规矩（`AGENTS.md` §Crypto Rules）：加密原语一律用受审计的库，
+只手写组装胶水。Android 侧用 `org.bouncycastle:bcprov-jdk18on`，
+以下三个类即覆盖全部所需原语（均为纯 Java，无 minSdk 限制）：
+
+| 步骤 | BC 类 | 用法 |
+|---|---|---|
+| X25519 | `X25519Agreement` + `X25519PrivateKeyParameters` / `X25519PublicKeyParameters` | 临时 keypair 由 `SecureRandom` 32 字节生成；`agreement.calculateAgreement(peerPub, shared, 0)` 得 32 字节共享密钥；全零结果视为失败 |
+| HKDF-SHA256 | `HKDFBytesGenerator` + `SHA256Digest` | `init(HKDFParameters(shared, salt, info))`，`generateBytes(key, 0, 32)`；`salt = serverPub \|\| clientPub`（§3 顺序），`info` 见 §3 |
+| XChaCha20-Poly1305 | `org.bouncycastle.crypto.modes.XChaCha20Poly1305` | `init(false, AEADParameters(KeyParameter(key), 128, nonce, aad))`，`aad` 为 keyType 的 UTF-8 字节；`doFinal` 抛异常即解密失败，中止 |
+
+**红线：只用 `org.bouncycastle.crypto.*` 轻量 API，不要注册 JCE
+Provider**（`Security.addProvider`）。Android 系统自带老版本 BC，
+注册会冲突；直接 new 这些类当普通 Java 类用即可。
+
+不选 Tink 的原因：Tink 不暴露裸 X25519 密钥协商（只有 ECIES/HPKE，
+和本线格式对不上），且其 AEAD 默认带 5 字节 key-id 前缀，需配
+`NO_PREFIX` 才互通——引入它只解决三分之一问题。JCE 的 `XDH`
+（API 31+）可备选做 X25519，但为统一仍建议全走 BC。
+
+依赖体积：bcprov jar 本体较大，R8/minify 后只保留用到的类，
+实际增量以 App 仓实测为准。
 
 ## 5. 测试向量（十六进制）
 
@@ -116,6 +127,6 @@ RFC 原文为准。
   `30002 update_url_invalid`（篡改/公钥非法/keyType 不支持）、
   `40001 rate_limited`（resolve 限流约每用户 5 次突发，不要紧循环重试）。
 - targetUrl、解密中间值只驻进程内存：不写 Room/DataStore/文件/日志；
-  `exp` 过期即丢弃；每次请求换新 keypair；禁止把长期密钥内置进 APK。
+  `exp` 过期即丢弃；每次请求换新 keypair，私钥字节用完后清零；禁止把长期密钥内置进 APK。
 - WebDAV 凭据的加密分支同构（scope 换成 `credential`，接口
   `POST /api/v1/webdav/credential`），另行接入时照此办理。
