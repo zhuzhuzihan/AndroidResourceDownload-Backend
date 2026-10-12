@@ -1,0 +1,22 @@
+# Go
+bin/
+dist/
+coverage.out
+coverage.html
+
+# SQLite dev data
+data/*.db
+data/*.db-journal
+data/*.sqlite
+data/*.sqlite-journal
+
+# Env (never commit real secrets)
+.env
+tmp/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
