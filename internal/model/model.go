@@ -134,6 +134,8 @@ type UpdateURLLog struct {
 	VersionCode  *int64    `json:"version_code,omitempty"`
 	EncryptedURL string    `gorm:"type:text" json:"encrypted_url"`
 	Resolved     bool      `gorm:"not null;default:false" json:"resolved"`
+	JTI          *string   `gorm:"size:64;index" json:"jti,omitempty"`
+	KeyType      *string   `gorm:"size:64" json:"key_type,omitempty"`
 	IP           *string   `gorm:"size:64" json:"ip,omitempty"`
 	UserAgent    *string   `gorm:"type:text" json:"user_agent,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -147,6 +149,7 @@ type WebDAVCredentialLog struct {
 	UserID     *string   `gorm:"size:36;index" json:"user_id,omitempty"`
 	Role       string    `gorm:"size:20;not null" json:"role"`
 	Permission string    `gorm:"size:20;not null" json:"permission"`
+	KeyType    *string   `gorm:"size:64" json:"key_type,omitempty"`
 	IP         *string   `gorm:"size:64" json:"ip,omitempty"`
 	UserAgent  *string   `gorm:"type:text" json:"user_agent,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`

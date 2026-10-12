@@ -75,17 +75,21 @@ CREATE TABLE IF NOT EXISTS update_url_logs (
     version_code   BIGINT,
     encrypted_url  TEXT NOT NULL,
     resolved       BOOLEAN NOT NULL DEFAULT false,
+    jti            VARCHAR(64),
+    key_type       VARCHAR(64),
     ip             VARCHAR(64),
     user_agent     TEXT,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_uul_user_id ON update_url_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_uul_jti ON update_url_logs(jti);
 
 CREATE TABLE IF NOT EXISTS webdav_credential_logs (
     id         VARCHAR(36) PRIMARY KEY,
     user_id    VARCHAR(36),
     role       VARCHAR(20) NOT NULL,
     permission VARCHAR(20) NOT NULL,
+    key_type   VARCHAR(64),
     ip         VARCHAR(64),
     user_agent TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

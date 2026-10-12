@@ -64,3 +64,12 @@ GitHub OAuth callback 由后端 HTTPS 接收，后端只通过 App deep link 返
 支持的文件可通过凭据化 WebDAV `GET` 直接在内存中预览，不创建下载任务、不写入文件或缓存。纯文本、常见代码/配置、RTF、DOCX/ODT 文本内容以及 JPEG、PNG、WebP、BMP、静态 GIF 受支持；旧版二进制 DOC、PDF、SVG、APK 和压缩包不显示预览入口。文本使用有限前缀，图片与文档使用完整编码大小上限；Range 被忽略时仍由流读取边界兜底，Office 容器同时限制 ZIP 解压量和 XML 复杂度。
 
 管理员可在线编辑完整加载的纯文本预览。保存使用保留原编码和 BOM 的 WebDAV `PUT`，并且仅在本次预览 GET 返回有效强 ETag 时开放编辑，通过 `If-Match` 防止覆盖并发修改。普通用户、截断文本、未知或无法无损写回的编码、缺少强 ETag 的文件，以及 RTF、DOCX、ODT 和图片均隐藏编辑入口。
+
+## ECDH 加密下发（v1，`keyType=x25519-xchacha20poly1305-v1`）
+
+新 App 在以下两个接口携带临时 X25519 公钥即进入加密分支；不带则走原明文字段（兼容老 App）：
+
+- `POST /api/v1/webdav/credential`：请求 `{ "clientPublicKey": "<base64url 裸 32B>", "keyType": "x25519-xchacha20poly1305-v1" }`，响应 `data.encryptedCredential = { serverPublicKey, nonce, ciphertext, keyType }`，明文字段省略。
+- `POST /api/v1/update/resolve`：请求在 `encryptedUrl` 之外加 `clientPublicKey/keyType`，响应 `data.encryptedUrl` 为同形 envelope，明文 `url` 省略。
+
+构造（与后端 `internal/pkg/crypto/ecdh.go` 头注释保持一致）：`shared = X25519(己方私钥, 对方公钥)`，`salt = serverPub || clientPub`（固定顺序），`info = "webdavbox-ecdh-v1|" + scope`（`credential` / `update`），`key = HKDF-SHA256(salt, shared, info, 32)`，`密文 = XChaCha20-Poly1305(key, 随机 24B nonce, 明文 JSON, AAD=keyType)`。密钥对每次临时生成、不持久化；解密只驻进程内存，遵守既有“不写 Room/文件/日志”边界。`update/resolve` 的兑换为单次有效：同一 `encryptedUrl` 第二次兑换返回 `update_url_expired`（30001）。

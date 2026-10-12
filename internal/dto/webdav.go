@@ -18,12 +18,25 @@ type CredentialPayload struct {
 	JTI        string `json:"jti"`
 }
 
-// CredentialResponse is the MVP /webdav/credential response (HTTPS, JSON).
+// CredentialResponse is the /webdav/credential response. MVP clients read the
+// plaintext fields over HTTPS; ECDH clients read EncryptedCredential and
+// ignore the (omitted) plaintext.
 type CredentialResponse struct {
-	BaseURL    string `json:"baseUrl"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	RootPath   string `json:"rootPath"`
+	BaseURL    string `json:"baseUrl,omitempty"`
+	Username   string `json:"username,omitempty"`
+	Password   string `json:"password,omitempty"`
+	RootPath   string `json:"rootPath,omitempty"`
 	Permission string `json:"permission"`
 	ExpiresAt  int64  `json:"expiresAt"`
+
+	EncryptedCredential *EncryptedEnvelope `json:"encryptedCredential,omitempty"`
+}
+
+// EncryptedEnvelope is the wire form of an ECDH-sealed payload. All fields
+// are base64url (no padding); see crypto.SealForClient for construction.
+type EncryptedEnvelope struct {
+	ServerPublicKey string `json:"serverPublicKey"`
+	Nonce           string `json:"nonce"`
+	Ciphertext      string `json:"ciphertext"`
+	KeyType         string `json:"keyType"`
 }

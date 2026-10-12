@@ -8,6 +8,7 @@ import (
 
 	"resdownload.com/backend/internal/dto"
 	"resdownload.com/backend/internal/middleware"
+	"resdownload.com/backend/internal/pkg/crypto"
 	"resdownload.com/backend/internal/pkg/response"
 	"resdownload.com/backend/internal/service"
 )
@@ -42,7 +43,18 @@ func (h *UpdateHandler) Resolve(c *gin.Context) {
 		return
 	}
 	uid := middleware.UserIDFromContext(c)
-	resolved, err := h.svc.Resolve(req.EncryptedURL, uid, clientIP(c), userAgent(c))
+	// Presence of clientPublicKey selects the ECDH envelope branch.
+	var resolved *dto.UpdateResolveResponse
+	var err error
+	if req.ClientPublicKey != "" {
+		if req.KeyType != "" && req.KeyType != crypto.KeyTypeV1 {
+			response.Fail(c, response.ErrUpdateURLInvalid)
+			return
+		}
+		resolved, err = h.svc.ResolveEncrypted(req.EncryptedURL, req.ClientPublicKey, uid, clientIP(c), userAgent(c))
+	} else {
+		resolved, err = h.svc.Resolve(req.EncryptedURL, uid, clientIP(c), userAgent(c))
+	}
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrUpdateURLExpired):

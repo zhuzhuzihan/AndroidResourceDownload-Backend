@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,7 +76,97 @@ func (s *UpdateService) Info() (*dto.UpdateInfoResponse, error) {
 // Resolve verifies the encrypted URL, returns the underlying target URL,
 // and persists a log entry. The log records metadata only — never the
 // plaintext payload.
+//
+// Each issuance is single-use: resolving the same encrypted URL twice
+// reports it as expired on the second attempt.
 func (s *UpdateService) Resolve(encStr string, userID, ip, userAgent string) (*dto.UpdateResolveResponse, error) {
+	payload, err := s.resolvePayload(encStr)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved := true
+	log := &model.UpdateURLLog{
+		ID:           uuid.NewString(),
+		UserID:       nullableString(userID),
+		VersionCode:  &payload.VersionCode,
+		EncryptedURL: encStr,
+		Resolved:     resolved,
+		JTI:          nullableString(payload.JTI),
+		IP:           nullableString(ip),
+		UserAgent:    nullableString(userAgent),
+	}
+	_ = s.logs.Create(log)
+
+	return &dto.UpdateResolveResponse{
+		URL:       payload.TargetURL,
+		ExpiresIn: int(s.ttl.Seconds()),
+	}, nil
+}
+
+// ResolveEncrypted verifies the encrypted URL like Resolve, but instead of
+// the plaintext target URL it returns a fresh ECDH v1 envelope sealed for
+// the holder of the base64url-encoded client X25519 public key. The client
+// decrypts it locally; the fresh envelope is therefore not tracked for
+// replay (only the redeemed issuance JTI is).
+func (s *UpdateService) ResolveEncrypted(encStr, clientPubB64, userID, ip, userAgent string) (*dto.UpdateResolveResponse, error) {
+	clientPub, err := base64.RawURLEncoding.DecodeString(clientPubB64)
+	if err != nil {
+		return nil, fmt.Errorf("update_service: decode client key: %w", err)
+	}
+	payload, err := s.resolvePayload(encStr)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	fresh := &dto.UpdateURLPayload{
+		VersionCode: payload.VersionCode,
+		TargetURL:   payload.TargetURL,
+		ExpiresAt:   now.Add(s.ttl).Unix(),
+		JTI:         uuid.NewString(),
+	}
+	plaintext, err := json.Marshal(fresh)
+	if err != nil {
+		return nil, fmt.Errorf("update_service: marshal: %w", err)
+	}
+	serverPriv, _, err := crypto.GenerateECDHKeypair()
+	if err != nil {
+		return nil, fmt.Errorf("update_service: keypair: %w", err)
+	}
+	serverPub, nonce, ct, err := crypto.SealForClient(serverPriv, clientPub, plaintext, crypto.ECDHScopeUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved := true
+	log := &model.UpdateURLLog{
+		ID:           uuid.NewString(),
+		UserID:       nullableString(userID),
+		VersionCode:  &payload.VersionCode,
+		EncryptedURL: encStr,
+		Resolved:     resolved,
+		JTI:          nullableString(payload.JTI),
+		KeyType:      ptrStr(crypto.KeyTypeV1),
+		IP:           nullableString(ip),
+		UserAgent:    nullableString(userAgent),
+	}
+	_ = s.logs.Create(log)
+
+	return &dto.UpdateResolveResponse{
+		ExpiresIn: int(s.ttl.Seconds()),
+		EncryptedURL: &dto.EncryptedEnvelope{
+			ServerPublicKey: base64.RawURLEncoding.EncodeToString(serverPub),
+			Nonce:           base64.RawURLEncoding.EncodeToString(nonce),
+			Ciphertext:      base64.RawURLEncoding.EncodeToString(ct),
+			KeyType:         crypto.KeyTypeV1,
+		},
+	}, nil
+}
+
+// resolvePayload parses, verifies and decrypts an issuance envelope, then
+// enforces single-use via the issuance JTI.
+func (s *UpdateService) resolvePayload(encStr string) (*dto.UpdateURLPayload, error) {
 	enc, err := parseComposite(encStr)
 	if err != nil {
 		return nil, err
@@ -95,23 +186,16 @@ func (s *UpdateService) Resolve(encStr string, userID, ip, userAgent string) (*d
 	if err := json.Unmarshal(plaintext, payload); err != nil {
 		return nil, ErrUpdateURLInvalid
 	}
-
-	resolved := true
-	log := &model.UpdateURLLog{
-		ID:           uuid.NewString(),
-		UserID:       nullableString(userID),
-		VersionCode:  &payload.VersionCode,
-		EncryptedURL: encStr,
-		Resolved:     resolved,
-		IP:           nullableString(ip),
-		UserAgent:    nullableString(userAgent),
+	if payload.JTI != "" {
+		used, err := s.logs.ExistsByJTI(payload.JTI)
+		if err != nil {
+			return nil, err
+		}
+		if used {
+			return nil, ErrUpdateURLExpired
+		}
 	}
-	_ = s.logs.Create(log)
-
-	return &dto.UpdateResolveResponse{
-		URL:       payload.TargetURL,
-		ExpiresIn: int(s.ttl.Seconds()),
-	}, nil
+	return payload, nil
 }
 
 // ErrUpdateURLExpired is exported for handler mapping.

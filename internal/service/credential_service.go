@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,13 +88,51 @@ func (s *CredentialService) IssuePlaintext(role model.Role) (*dto.CredentialResp
 	}, enc, nil
 }
 
+// IssueEncrypted seals the credential payload for the holder of the
+// base64url-encoded client X25519 public key (ECDH v1 envelope). The response
+// carries no plaintext credential fields.
+func (s *CredentialService) IssueEncrypted(role model.Role, clientPubB64 string) (*dto.CredentialResponse, error) {
+	clientPub, err := base64.RawURLEncoding.DecodeString(clientPubB64)
+	if err != nil {
+		return nil, fmt.Errorf("credential_service: decode client key: %w", err)
+	}
+	payload, _, err := s.BuildPayload(role)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("credential_service: marshal: %w", err)
+	}
+	serverPriv, _, err := crypto.GenerateECDHKeypair()
+	if err != nil {
+		return nil, fmt.Errorf("credential_service: keypair: %w", err)
+	}
+	serverPub, nonce, ct, err := crypto.SealForClient(serverPriv, clientPub, plaintext, crypto.ECDHScopeCredential)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.CredentialResponse{
+		Permission: payload.Permission,
+		ExpiresAt:  payload.ExpiresAt,
+		EncryptedCredential: &dto.EncryptedEnvelope{
+			ServerPublicKey: base64.RawURLEncoding.EncodeToString(serverPub),
+			Nonce:           base64.RawURLEncoding.EncodeToString(nonce),
+			Ciphertext:      base64.RawURLEncoding.EncodeToString(ct),
+			KeyType:         crypto.KeyTypeV1,
+		},
+	}, nil
+}
+
 // Log records a credential issuance event. Passwords are never stored.
-func (s *CredentialService) Log(ctx context.Context, userID, role, permission, ip, userAgent string) {
+// keyType is "" for legacy plaintext issuance.
+func (s *CredentialService) Log(ctx context.Context, userID, role, permission, keyType, ip, userAgent string) {
 	log := &model.WebDAVCredentialLog{
 		ID:         uuid.NewString(),
 		UserID:     nullableString(userID),
 		Role:       role,
 		Permission: permission,
+		KeyType:    nullableString(keyType),
 		IP:         nullableString(ip),
 		UserAgent:  nullableString(userAgent),
 	}

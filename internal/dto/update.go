@@ -12,14 +12,20 @@ type UpdateInfoResponse struct {
 }
 
 // UpdateResolveRequest is the body for POST /api/v1/update/resolve.
+// Clients requesting the ECDH envelope set ClientPublicKey (+ KeyType);
+// legacy clients omit both and receive the plaintext URL.
 type UpdateResolveRequest struct {
-	EncryptedURL string `json:"encryptedUrl" binding:"required"`
+	EncryptedURL    string `json:"encryptedUrl" binding:"required"`
+	ClientPublicKey string `json:"clientPublicKey,omitempty"`
+	KeyType         string `json:"keyType,omitempty"`
 }
 
 // UpdateResolveResponse is the payload returned by POST /api/v1/update/resolve.
 type UpdateResolveResponse struct {
-	URL       string `json:"url"`
+	URL       string `json:"url,omitempty"`
 	ExpiresIn int    `json:"expiresIn"`
+
+	EncryptedURL *EncryptedEnvelope `json:"encryptedUrl,omitempty"`
 }
 
 // UpdateURLPayload is the plaintext sealed inside encryptedUrl.
