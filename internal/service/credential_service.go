@@ -36,8 +36,9 @@ func NewCredentialService(suite *crypto.Suite, cfg WebDAVConfigProvider, logs *r
 }
 
 // BuildPayload composes the plaintext credential payload for the role and
-// returns both the encrypted envelope (used by /webdav/credential MVP
-// callers) and the decrypted shape (used by tests).
+// returns both the decrypted shape (used by tests and the legacy plaintext
+// response) and the server-suite envelope (kept for audit/debug; the ECDH
+// client branch in IssueEncrypted seals via ecdh.go instead).
 func (s *CredentialService) BuildPayload(role model.Role) (*dto.CredentialPayload, *crypto.Encrypted, error) {
 	username, password, root, ttl := s.cfg.ForUser(role)
 	if username == "" || password == "" {
@@ -70,9 +71,8 @@ func (s *CredentialService) BuildPayload(role model.Role) (*dto.CredentialPayloa
 	return payload, enc, nil
 }
 
-// IssuePlaintext is the MVP /webdav/credential MVP body: HTTPS + JSON.
-// The encrypted envelope is also returned so handlers can include it in
-// logs / audit if desired.
+// IssuePlaintext is the legacy plaintext /webdav/credential body (HTTPS,
+// JSON), kept for clients that do not send clientPublicKey.
 func (s *CredentialService) IssuePlaintext(role model.Role) (*dto.CredentialResponse, *crypto.Encrypted, error) {
 	payload, enc, err := s.BuildPayload(role)
 	if err != nil {

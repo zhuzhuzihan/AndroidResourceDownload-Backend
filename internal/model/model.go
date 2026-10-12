@@ -134,7 +134,9 @@ type UpdateURLLog struct {
 	VersionCode  *int64    `json:"version_code,omitempty"`
 	EncryptedURL string    `gorm:"type:text" json:"encrypted_url"`
 	Resolved     bool      `gorm:"not null;default:false" json:"resolved"`
-	JTI          *string   `gorm:"size:64;index" json:"jti,omitempty"`
+	// JTI is unique: the index (not just the pre-insert check) arbitrates
+	// concurrent resolves of the same issuance.
+	JTI          *string   `gorm:"size:64;uniqueIndex" json:"jti,omitempty"`
 	KeyType      *string   `gorm:"size:64" json:"key_type,omitempty"`
 	IP           *string   `gorm:"size:64" json:"ip,omitempty"`
 	UserAgent    *string   `gorm:"type:text" json:"user_agent,omitempty"`

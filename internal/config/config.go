@@ -217,6 +217,11 @@ func bindEnvs(v *viper.Viper) {
 	_ = v.BindEnv("allowed-email-domains")
 	_ = v.BindEnv("admin-email-domains")
 	_ = v.BindEnv("user-email-domains")
+
+	// Documented aliases (.env.example) that do not match the default
+	// key→env mapping (update.secret would otherwise read UPDATE_SECRET).
+	_ = v.BindEnv("update.secret", "UPDATE_URL_SECRET", "UPDATE_SECRET")
+	_ = v.BindEnv("update.ttl-seconds", "UPDATE_URL_TTL_SECONDS", "UPDATE_TTL_SECONDS")
 }
 
 func validate(cfg *Config) error {
@@ -238,6 +243,18 @@ func validate(cfg *Config) error {
 		}
 		if cfg.Qq.AppID == "" {
 			return fmt.Errorf("config: qq.app-id is required in prod")
+		}
+		for _, s := range []struct {
+			name  string
+			value string
+		}{
+			{"jwt.secret", cfg.JWT.Secret},
+			{"credential.secret", cfg.Credential.Secret},
+			{"update.secret", cfg.Update.Secret},
+		} {
+			if len(s.value) < 32 || strings.Contains(s.value, "change-me") {
+				return fmt.Errorf("config: %s must be a strong random value (>= 32 chars, not the placeholder) in prod", s.name)
+			}
 		}
 		callback, err := url.Parse(cfg.Github.RedirectURI)
 		if err != nil || callback.Scheme != "https" || callback.Host == "" {

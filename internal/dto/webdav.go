@@ -1,7 +1,8 @@
 package dto
 
 // CredentialRequest is the body for POST /api/v1/webdav/credential.
-// MVP supports empty body; reserved fields are kept for the future ECDH flow.
+// An empty body selects the legacy plaintext response; setting
+// ClientPublicKey (+ KeyType) selects the ECDH envelope branch.
 type CredentialRequest struct {
 	ClientPublicKey string `json:"clientPublicKey,omitempty"`
 	KeyType         string `json:"keyType,omitempty"`

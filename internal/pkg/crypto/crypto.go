@@ -1,8 +1,7 @@
-// Package crypto provides the symmetric primitives used to encrypt WebDAV
-// credentials and update URLs (AES-256-GCM with HMAC-SHA256 signatures).
-//
-// The MVP keeps a single pre-shared key per concern. ECDH-ES (方案 B in
-// 后端.md §11.4) is left as a future hook via EncryptWithEphemeralKey stub.
+// Package crypto provides the symmetric primitives used to seal issuance
+// payloads: the server-side suite below (AES-256-GCM with HMAC-SHA256,
+// pre-shared per-concern keys) plus the ephemeral ECDH envelopes in ecdh.go
+// (X25519 + HKDF-SHA256 + XChaCha20-Poly1305) for client-facing issuance.
 package crypto
 
 import (

@@ -91,6 +91,6 @@ docker compose up -d
 
 ## 已知风险
 
-- WebDAV 静态账号：所有 USER 共用一个只读账号，管理员同理；操作无法精确到个人。MVP 范围，后续可换动态临时账号。
+- WebDAV 静态账号：所有 USER 共用一个只读账号，管理员同理；操作无法精确到个人。经确认上游 WebDAV 服务只支持固定账号，维持共享模型不再推进动态账号；缓解措施为短期 TTL（`user/admin-credential-ttl-seconds`）加发放审计（`webdav_credential_logs` 记 `key_type` 区分明文/ECDH 分支）。
 - 加密预共享密钥：`CREDENTIAL_SECRET`、`UPDATE_URL_SECRET` 需妥善保管，泄露后凭据/更新链接可被解密。
 - 当前不实现真实 WebDAV 代理；后端只下发凭据，由 Android 客户端直连 WebDAV。

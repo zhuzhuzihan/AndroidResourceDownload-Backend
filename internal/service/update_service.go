@@ -96,7 +96,9 @@ func (s *UpdateService) Resolve(encStr string, userID, ip, userAgent string) (*d
 		IP:           nullableString(ip),
 		UserAgent:    nullableString(userAgent),
 	}
-	_ = s.logs.Create(log)
+	if err := recordResolve(s, log, payload.JTI); err != nil {
+		return nil, err
+	}
 
 	return &dto.UpdateResolveResponse{
 		URL:       payload.TargetURL,
@@ -151,7 +153,9 @@ func (s *UpdateService) ResolveEncrypted(encStr, clientPubB64, userID, ip, userA
 		IP:           nullableString(ip),
 		UserAgent:    nullableString(userAgent),
 	}
-	_ = s.logs.Create(log)
+	if err := recordResolve(s, log, payload.JTI); err != nil {
+		return nil, err
+	}
 
 	return &dto.UpdateResolveResponse{
 		ExpiresIn: int(s.ttl.Seconds()),
@@ -162,6 +166,19 @@ func (s *UpdateService) ResolveEncrypted(encStr, clientPubB64, userID, ip, userA
 			KeyType:         crypto.KeyTypeV1,
 		},
 	}, nil
+}
+
+// recordResolve persists the resolution log. The unique index on jti (not
+// just the pre-insert ExistsByJTI check) arbitrates concurrent resolves: if
+// the insert loses the race, the issuance was consumed and the caller is
+// told it expired. Genuine logging failures stay non-fatal, as before.
+func recordResolve(s *UpdateService, log *model.UpdateURLLog, jti string) error {
+	if err := s.logs.Create(log); err != nil && jti != "" {
+		if used, qerr := s.logs.ExistsByJTI(jti); qerr == nil && used {
+			return ErrUpdateURLExpired
+		}
+	}
+	return nil
 }
 
 // resolvePayload parses, verifies and decrypts an issuance envelope, then
