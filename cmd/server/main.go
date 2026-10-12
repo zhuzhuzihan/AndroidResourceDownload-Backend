@@ -65,6 +65,7 @@ func main() {
 	authSvc := service.NewAuthService(repos.Users, repos.Identities, repos.AdminGithub, tokens, roles, emails, github, repos.AuditLogs, log)
 	githubOAuth := service.NewGithubOAuthService(authSvc, github, repos.OAuthTransactions, &cfg.Github)
 	qqAuth := service.NewQqAuthService(authSvc, service.NewQqClient(&cfg.Qq))
+	adminSvc := service.NewAdminService(repos.AppVersions, repos.UpdateURLLogs, repos.CredentialLogs, repos.AuditLogs)
 	limiter := ratelimit.NewInMemory(ratelimit.DefaultRules()...)
 
 	gin.SetMode(gin.ReleaseMode)
@@ -85,6 +86,7 @@ func main() {
 		Tokens:      tokens,
 		GithubOAuth: githubOAuth,
 		Qq:          qqAuth,
+		Admin:       adminSvc,
 	})
 
 	srv := &app.Server{

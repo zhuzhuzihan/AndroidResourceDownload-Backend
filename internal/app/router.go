@@ -12,6 +12,7 @@ import (
 	"resdownload.com/backend/internal/config"
 	"resdownload.com/backend/internal/handler"
 	"resdownload.com/backend/internal/middleware"
+	"resdownload.com/backend/internal/model"
 	"resdownload.com/backend/internal/pkg/jwt"
 	"resdownload.com/backend/internal/pkg/response"
 	"resdownload.com/backend/internal/ratelimit"
@@ -32,6 +33,7 @@ type Deps struct {
 	Tokens      *service.TokenService
 	GithubOAuth *service.GithubOAuthService
 	Qq          *service.QqAuthService
+	Admin       *service.AdminService
 }
 
 // RegisterRoutes attaches every endpoint to r.
@@ -62,6 +64,22 @@ func RegisterRoutes(r *gin.Engine, d *Deps) {
 	updH := handler.NewUpdateHandler(d.Updates, d.Logger)
 	api.GET("/update/info", authMW, updH.Info)
 	api.POST("/update/resolve", authMW, middleware.RateLimitByKey(d.Limiter, "update_per_user", userIDKey), updH.Resolve)
+
+	// Admin console endpoints: authenticated + ADMIN role + strict limits.
+	adminH := handler.NewAdminHandler(d.Admin, d.Logger)
+	admin := api.Group("/admin",
+		authMW,
+		middleware.RequireRole(model.RoleAdmin),
+		middleware.RateLimitByKey(d.Limiter, "admin_per_user", userIDKey),
+	)
+	admin.GET("/versions", adminH.ListVersions)
+	admin.POST("/versions", adminH.PublishVersion)
+	admin.DELETE("/versions/:code", adminH.DeleteVersion)
+	admin.GET("/stats/issuance", adminH.IssuanceStats)
+	admin.GET("/alerts/sessions", adminH.SessionAlerts)
+	admin.GET("/logs/credentials", adminH.CredentialLogs)
+	admin.GET("/logs/updates", adminH.UpdateLogs)
+	admin.GET("/logs/audit", adminH.AuditLogs)
 }
 
 // Server wraps http.Server so main can call ListenAndServe / Shutdown

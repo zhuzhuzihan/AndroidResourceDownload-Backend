@@ -85,6 +85,7 @@ func newTestEnvWithLogger(t *testing.T, log *slog.Logger) *testEnv {
 	updateSvc := service.NewUpdateService(suite, repos.AppVersions, repos.UpdateURLLogs, cfg.Update.TTLSeconds)
 	authSvc := service.NewAuthService(repos.Users, repos.Identities, repos.AdminGithub, tokens, roles, emails, github, repos.AuditLogs, log)
 	limiter := ratelimit.NewInMemory(ratelimit.DefaultRules()...)
+	adminSvc := service.NewAdminService(repos.AppVersions, repos.UpdateURLLogs, repos.CredentialLogs, repos.AuditLogs)
 
 	r := gin.New()
 	r.Use(middleware.TraceID())
@@ -103,6 +104,7 @@ func newTestEnvWithLogger(t *testing.T, log *slog.Logger) *testEnv {
 		Tokens:      tokens,
 		GithubOAuth: service.NewGithubOAuthService(authSvc, github, repos.OAuthTransactions, &cfg.Github),
 		Qq:          service.NewQqAuthService(authSvc, service.NewQqClient(&cfg.Qq)),
+		Admin:       adminSvc,
 	})
 
 	return &testEnv{router: r, cfg: cfg, repos: repos, emails: emails}

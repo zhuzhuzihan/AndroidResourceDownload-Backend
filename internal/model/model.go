@@ -140,7 +140,7 @@ type UpdateURLLog struct {
 	KeyType      *string   `gorm:"size:64" json:"key_type,omitempty"`
 	IP           *string   `gorm:"size:64" json:"ip,omitempty"`
 	UserAgent    *string   `gorm:"type:text" json:"user_agent,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	CreatedAt    time.Time `gorm:"index" json:"created_at"`
 }
 
 func (UpdateURLLog) TableName() string { return "update_url_logs" }
@@ -154,7 +154,7 @@ type WebDAVCredentialLog struct {
 	KeyType    *string   `gorm:"size:64" json:"key_type,omitempty"`
 	IP         *string   `gorm:"size:64" json:"ip,omitempty"`
 	UserAgent  *string   `gorm:"type:text" json:"user_agent,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	CreatedAt  time.Time `gorm:"index" json:"created_at"`
 }
 
 func (WebDAVCredentialLog) TableName() string { return "webdav_credential_logs" }
@@ -170,7 +170,7 @@ type AuditLog struct {
 	StatusCode   *int      `json:"status_code,omitempty"`
 	IP           *string   `gorm:"size:64" json:"ip,omitempty"`
 	UserAgent    *string   `gorm:"type:text" json:"user_agent,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	CreatedAt    time.Time `gorm:"index" json:"created_at"`
 }
 
 func (AuditLog) TableName() string { return "audit_logs" }

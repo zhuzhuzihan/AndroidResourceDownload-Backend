@@ -82,6 +82,7 @@ func (s *UpdateService) Info() (*dto.UpdateInfoResponse, error) {
 func (s *UpdateService) Resolve(encStr string, userID, ip, userAgent string) (*dto.UpdateResolveResponse, error) {
 	payload, err := s.resolvePayload(encStr)
 	if err != nil {
+		s.recordFailure(encStr, "", userID, ip, userAgent)
 		return nil, err
 	}
 
@@ -118,6 +119,7 @@ func (s *UpdateService) ResolveEncrypted(encStr, clientPubB64, userID, ip, userA
 	}
 	payload, err := s.resolvePayload(encStr)
 	if err != nil {
+		s.recordFailure(encStr, crypto.KeyTypeV1, userID, ip, userAgent)
 		return nil, err
 	}
 
@@ -179,6 +181,20 @@ func recordResolve(s *UpdateService, log *model.UpdateURLLog, jti string) error 
 		}
 	}
 	return nil
+}
+
+// recordFailure persists a failed resolve attempt for ops visibility. JTI is
+// left nil so failure rows never collide with the unique single-use index.
+func (s *UpdateService) recordFailure(encStr, keyType, userID, ip, userAgent string) {
+	_ = s.logs.Create(&model.UpdateURLLog{
+		ID:           uuid.NewString(),
+		UserID:       nullableString(userID),
+		EncryptedURL: encStr,
+		Resolved:     false,
+		KeyType:      nullableString(keyType),
+		IP:           nullableString(ip),
+		UserAgent:    nullableString(userAgent),
+	})
 }
 
 // resolvePayload parses, verifies and decrypts an issuance envelope, then

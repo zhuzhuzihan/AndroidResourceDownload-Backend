@@ -120,5 +120,7 @@ func DefaultRules() []Rule {
 		{Name: "webdav_per_user", PerKey: rate.Every(6 * time.Second), Burst: 10, TTL: time.Minute},
 		// update resolve per user per minute
 		{Name: "update_per_user", PerKey: rate.Every(12 * time.Second), Burst: 5, TTL: time.Minute},
+		// admin API per user (stricter than user-facing endpoints)
+		{Name: "admin_per_user", PerKey: rate.Every(2 * time.Second), Burst: 30, TTL: time.Minute},
 	}
 }
