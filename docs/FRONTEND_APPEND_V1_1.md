@@ -21,9 +21,14 @@ Android 使用后端实际路由和统一响应包络：
 
 ## 安全边界
 
-本期使用 HTTPS 简化凭据模式，因为现有后端会返回明文 JSON 凭据，且尚未实现真正的 ECDH 协议。Android 将 WebDAV 用户名和密码限制在进程内存中，过期、401、角色变化和登出时清除；不写入 Room、DataStore、普通文件或日志。QQ provider token 仅用于一次后端换取应用会话，并在回调后同步清除 OpenSDK 会话。`expiresAt` 不能撤销后端当前的静态共享 WebDAV 密码，生产环境仍应换成服务端可撤销的临时账号、令牌或代理。
+本期凭据下发有两条分支：老 App 走 HTTPS 明文 JSON（兼容保留），新 App
+走 ECDH 加密分支（`keyType=x25519-xchacha20poly1305-v1`，见本文 §ECDH
+与 `APP_UPDATE_ECDH_V1.md`）。Android 将 WebDAV 用户名和密码限制在进程内存中，过期、401、角色变化和登出时清除；不写入 Room、DataStore、普通文件或日志。QQ provider token 仅用于一次后端换取应用会话，并在回调后同步清除 OpenSDK 会话。后端当前是静态共享 WebDAV 账号（`expiresAt` 不能撤销密码）；经确认上游只支持固定账号，维持该模型，以短期 TTL 加发放审计为缓解，不再推进动态临时账号。
 
-ECDH-ES/A256GCM 不会在客户端单方面伪实现，也不会把长期密钥内置 APK。后续增强协议必须同时具备版本、服务端签名、Keystore 私钥、HKDF 域隔离、AEAD 关联数据和禁止降级策略。
+加密分支用临时 X25519（每次请求新生成、用完清零，不内置长期密钥、不进
+Keystore）+ HKDF-SHA256 域隔离 + XChaCha20-Poly1305（AAD 绑 `keyType`），
+Android 侧用 BouncyCastle 轻量 API 实现（禁手写原语，见 `AGENTS.md`
+§Crypto Rules）。具体字段与向量见 `APP_UPDATE_ECDH_V1.md`。
 
 ## 构建配置
 
@@ -38,7 +43,7 @@ demoMode=false
 
 ## 仓库版本检查
 
-设置页手动读取仓库根目录 `latest_version.txt`，格式为 `latest_version=x.x.x` 和 `update_url=https://...`。客户端使用 `BuildConfig.VERSION_NAME` 的完整三段数字版本逐段比较，不使用 `versionCode`；仅当远端版本更高时显示下载提示，并通过系统浏览器打开经过 HTTPS 校验的更新地址。本地版本大于或等于远端版本时只提示已是最新版本。
+设置页手动读取仓库根目录 `latest_version.txt`，格式为 `latest_version=x.x.x` 和 `update_url=https://...`。客户端使用 `BuildConfig.VERSION_NAME` 的完整三段数字版本逐段比较，不使用 `versionCode`；仅当远端版本更高时显示下载提示，并通过系统浏览器打开经过 HTTPS 校验的更新地址。本地版本大于或等于远端版本时只提示已是最新版本。（过渡方案：App 接入后端 `GET /update/info` + `POST /update/resolve` 加密下发后，改从后端取更新地址，本节作废，见 `APP_UPDATE_ECDH_V1.md`。）
 
 ## Android 直连 WebDAV
 
@@ -72,4 +77,4 @@ GitHub OAuth callback 由后端 HTTPS 接收，后端只通过 App deep link 返
 - `POST /api/v1/webdav/credential`：请求 `{ "clientPublicKey": "<base64url 裸 32B>", "keyType": "x25519-xchacha20poly1305-v1" }`，响应 `data.encryptedCredential = { serverPublicKey, nonce, ciphertext, keyType }`，明文字段省略。
 - `POST /api/v1/update/resolve`：请求在 `encryptedUrl` 之外加 `clientPublicKey/keyType`，响应 `data.encryptedUrl` 为同形 envelope，明文 `url` 省略。
 
-构造（与后端 `internal/pkg/crypto/ecdh.go` 头注释保持一致）：`shared = X25519(己方私钥, 对方公钥)`，`salt = serverPub || clientPub`（固定顺序），`info = "webdavbox-ecdh-v1|" + scope`（`credential` / `update`），`key = HKDF-SHA256(salt, shared, info, 32)`，`密文 = XChaCha20-Poly1305(key, 随机 24B nonce, 明文 JSON, AAD=keyType)`。密钥对每次临时生成、不持久化；解密只驻进程内存，遵守既有“不写 Room/文件/日志”边界。`update/resolve` 的兑换为单次有效：同一 `encryptedUrl` 第二次兑换返回 `update_url_expired`（30001）。
+构造（与后端 `internal/pkg/crypto/ecdh.go` 头注释保持一致）：`shared = X25519(己方私钥, 对方公钥)`，`salt = serverPub || clientPub`（固定顺序），`info = "webdavbox-ecdh-v1|" + scope`（`credential` / `update`），`key = HKDF-SHA256(salt, shared, info, 32)`，`密文 = XChaCha20-Poly1305(key, 随机 24B nonce, 明文 JSON, AAD=keyType)`。密钥对每次临时生成、不持久化；解密只驻进程内存，遵守既有“不写 Room/文件/日志”边界。`update/resolve` 的兑换为单次有效：同一 `encryptedUrl` 第二次兑换返回 `update_url_expired`（30001）。App 端实现细节（BC 类用法、测试向量、联调清单）见 `APP_UPDATE_ECDH_V1.md`。
