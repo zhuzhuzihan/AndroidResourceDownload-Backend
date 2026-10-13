@@ -1,0 +1,21 @@
+name: admin_console
+description: Admin WebUI for the resdownload backend (admin API only).
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Exact pin per repo policy (AGENTS.md Crypto Rules / plan). No caret.
+  material_3_expressive: 1.1.6
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

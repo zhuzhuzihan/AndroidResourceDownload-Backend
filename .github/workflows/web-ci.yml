@@ -1,0 +1,53 @@
+name: Web CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/web-ci.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/web-ci.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: web-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: web/.fvmrc
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build web release
+        run: >
+          flutter build web --release
+          --dart-define=API_BASE_URL=https://api.example.com
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: admin-web
+          path: web/build/web
+          if-no-files-found: error

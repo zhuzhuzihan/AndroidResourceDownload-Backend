@@ -5,10 +5,12 @@
 - Standalone Go backend (`resdownload.com/backend`); no Android/Gradle code here.
 - Entry: `cmd/server/main.go`; routes in `internal/app/router.go`.
 - Client contract: `docs/FRONTEND_APPEND_V1_1.md` — verify against `router.go` before assuming end-to-end behavior.
+- Admin WebUI lives in `web/` (Flutter Web + `material_3_expressive`, exact pins in `web/.fvmrc` and `web/pubspec.yaml`); it only calls `/api/v1/admin/*` (`docs/ADMIN_API_V1.md`). Never bypass CI for web releases.
 
 ## Commands (repo root)
 
 - CI gate (`.github/workflows/backend-ci.yml`): `go vet ./...`, `go build ./...`, then `go test -race -count=1 ./...`.
+- Web gate (`.github/workflows/web-ci.yml`, runs on `web/**` changes): `flutter pub get`, `flutter analyze`, `flutter build web --release`. Flutter SDK is NOT installed in this dev box (toolchain pinned via `web/.fvmrc`); verify web changes through CI, not locally.
 - `make test` = race-enabled full suite; `make vet`, `make build`, `make tidy` are thin wrappers.
 - Focused: `go test ./internal/integration -run '^TestHealth$'`.
 - Integration tests (`internal/integration/`) use temp SQLite (`t.TempDir()`) + `GITHUB_MOCK=true`; no PostgreSQL, Redis, or external WebDAV needed. QQ tests stub `graph.qq.com` locally.
