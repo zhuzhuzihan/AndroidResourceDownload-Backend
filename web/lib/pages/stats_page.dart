@@ -68,7 +68,8 @@ class _StatsPageState extends State<StatsPage> {
                 type: M3EButtonGroupType.connected,
                 selectedIndex: _options.indexOf(_days),
                 onSelectedIndexChanged: (i) {
-                  setState(() => _days = _options[i]);
+                  setState(
+                      () => _days = _options[i ?? _options.indexOf(_days)]);
                   _load();
                 },
                 actions: const [

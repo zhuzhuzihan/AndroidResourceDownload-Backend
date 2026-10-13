@@ -93,10 +93,10 @@ class _AlertsPageState extends State<AlertsPage> {
                               final ips = ((a['ips'] as List?) ?? []).join(', ');
                               return M3ECard(
                                 variant: M3ECardVariant.outlined,
-                                headline: Text(
-                                    '${a['userId']} · ${a['ipCount']} 个 IP'),
-                                supportingText: Text(
-                                    '$ips\n最近出现 ${a['lastSeen'] ?? ''}'),
+                                headline:
+                                    '${a['userId']} · ${a['ipCount']} 个 IP',
+                                supportingText:
+                                    '$ips\n最近出现 ${a['lastSeen'] ?? ''}',
                               );
                             },
                           ),
