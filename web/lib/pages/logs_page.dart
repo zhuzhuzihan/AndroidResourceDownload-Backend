@@ -12,8 +12,6 @@ class LogsPage extends StatefulWidget {
 }
 
 class _LogsPageState extends State<LogsPage> {
-  static const _kinds = ['credentials', 'updates', 'audit'];
-  static const _labels = ['凭据', '解析', '审计'];
   String _kind = 'credentials';
   final _user = TextEditingController();
   List<dynamic> _items = [];
